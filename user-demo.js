@@ -9,6 +9,7 @@ app.listen(port, () => {
 /* Settings */
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)[A-Za-z\d\W]{8,20}$/;
 const invalidNameRegex = /[^A-Za-z- ]/;
+const invalidUsernameRegex = /[^A-Za-z0-9]/;
 
 /* Database */
 let userCount = 1;
@@ -44,6 +45,14 @@ app.post('/signup', (req, res) => {
             name
         }
 
+        // Check if username is invalid - alphabets and numbers only
+        if (invalidUsernameRegex.test(username) === true) {
+            return res.status(400).json({
+                error: "Username must contain only alphabets and numbers."
+            });
+        }
+
+        // Check if username already exists
         for (let existingUser of users.values()) {
             if (existingUser.username === user.username) {
                 return res.status(409).json({
@@ -53,11 +62,18 @@ app.post('/signup', (req, res) => {
         }
        
         // Check if password meets the requirements
-        if (password.length < 8 && password.length > 20) {
+        // If password has less than 8 characters or more than 20 characters
+        if (password.length < 8 || password.length > 20) {
             return res.status(400).json({
                 error: "Password must have the following requirements: 8-20 characters, at least one uppercase letter, one lowercase letter, one number, and one special character."
             });
         }
+        // If password has the following requirements
+        // 1. At least one uppercase letter
+        // 2. At least one lowercase letter
+        // 3. At least one number
+        // 4. At least one special character
+        // 5. 8-20 characters
         if (passwordRegex.test(password) === false) {
             return res.status(400).json({
                 error: "Password must have the following requirements: 8-20 characters, at least one uppercase letter, one lowercase letter, one number, and one special character."
