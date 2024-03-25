@@ -20,6 +20,38 @@ const users = new Map();
 app.use(express.json());
 
 
+/* Utility Functions */
+// Check if a user exists
+function getUser(username) {
+    for (const existingUser of users.values()) {
+        if (existingUser.username === username) {
+            return existingUser;
+        }
+    }
+
+    return null;
+}
+
+// Check password requirements
+function checkPasswordValidity(password) {
+    // If password has less than 8 characters or more than 20 characters
+    if (password.length < 8 || password.length > 20) {
+        return false;
+    }
+    // If password has the following requirements
+    // 1. At least one uppercase letter
+    // 2. At least one lowercase letter
+    // 3. At least one number
+    // 4. At least one special character
+    // 5. 8-20 characters
+    if (passwordRegex.test(password) === false) {
+        return false;
+    }
+
+    return true;
+}
+
+
 /* API Routes */
 // Using app.route() to chain multiple HTTP methods
 // app.route('/users').get((req, res) => {
@@ -27,7 +59,35 @@ app.use(express.json());
 // });
 
 // Login
-app.post('/login', (req, res) => {});
+app.post('/login', (req, res) => {
+    const {
+        username,
+        password
+    } = req.body;
+
+    // Check if username and password are provided
+    let user = getUser(username);
+
+    // If username exists
+    if (user) {
+        // Check if password is correct
+        if (user.password === password) {
+            return res.status(200).json({
+                message: `Welcome back, ${user.username}!`
+            });
+        }
+
+        // If password is incorrect
+        return res.status(401).json({
+            error: "Password is incorrect."
+        });
+    }
+
+    // If username does not exist
+    res.status(404).json({
+        error: "There is no user with the provided username."
+    });
+});
 
 // Signup
 app.post('/signup', (req, res) => {
@@ -53,28 +113,16 @@ app.post('/signup', (req, res) => {
         }
 
         // Check if username already exists
-        for (let existingUser of users.values()) {
-            if (existingUser.username === user.username) {
-                return res.status(409).json({
-                    error: "User with the username already exists."
-                });
-            }
+        const userExists = getUser(user.username);
+        if (userExists) {
+            return res.status(409).json({
+                error: "User with the username already exists."
+            });
         }
        
         // Check if password meets the requirements
         // If password has less than 8 characters or more than 20 characters
-        if (password.length < 8 || password.length > 20) {
-            return res.status(400).json({
-                error: "Password must have the following requirements: 8-20 characters, at least one uppercase letter, one lowercase letter, one number, and one special character."
-            });
-        }
-        // If password has the following requirements
-        // 1. At least one uppercase letter
-        // 2. At least one lowercase letter
-        // 3. At least one number
-        // 4. At least one special character
-        // 5. 8-20 characters
-        if (passwordRegex.test(password) === false) {
+        if (checkPasswordValidity(password) === false){
             return res.status(400).json({
                 error: "Password must have the following requirements: 8-20 characters, at least one uppercase letter, one lowercase letter, one number, and one special character."
             });
