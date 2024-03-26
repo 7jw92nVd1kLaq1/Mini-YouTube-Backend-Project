@@ -1,10 +1,5 @@
 const express = require('express');
-const app = express();
-const port = 3000;
-
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
+const router = express.Router();
 
 /* Settings */
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)[A-Za-z\d\W]{8,20}$/;
@@ -12,21 +7,13 @@ const invalidNameRegex = /[^A-Za-z- ]/;
 const invalidUsernameRegex = /[^A-Za-z0-9]/;
 
 /* Database */
-let userCount = 1;
 const users = new Map();
-
-
-/* Middleware */
-app.use(express.json());
-
 
 /* Utility Functions */
 // Check if a user exists
 function getUser(username) {
-    for (const existingUser of users.values()) {
-        if (existingUser.username === username) {
-            return existingUser;
-        }
+    if (users.has(username)) {
+        return users.get(username);
     }
 
     return null;
@@ -53,13 +40,13 @@ function checkPasswordValidity(password) {
 
 
 /* API Routes */
-// Using app.route() to chain multiple HTTP methods
-// app.route('/users').get((req, res) => {
+// Using router.route() to chain multiple HTTP methods
+// router.route('/users').get((req, res) => {
 // }).post((req, res) => {
 // });
 
 // Login
-app.post('/login', (req, res) => {
+router.post('/login', (req, res) => {
     const {
         username,
         password
@@ -73,7 +60,7 @@ app.post('/login', (req, res) => {
         // Check if password is correct
         if (user.password === password) {
             return res.status(200).json({
-                message: `Welcome back, ${user.username}!`
+                message: `Welcome back, ${username}!`
             });
         }
 
@@ -90,7 +77,7 @@ app.post('/login', (req, res) => {
 });
 
 // Signup
-app.post('/signup', (req, res) => {
+router.post('/signup', (req, res) => {
     const {
         username,
         password,
@@ -100,7 +87,6 @@ app.post('/signup', (req, res) => {
     // Check if username, password, and name are provided
     if (username && password && name) {
         const user = {
-            username,
             password,
             name
         }
@@ -113,7 +99,7 @@ app.post('/signup', (req, res) => {
         }
 
         // Check if username already exists
-        const userExists = getUser(user.username);
+        const userExists = getUser(username);
         if (userExists) {
             return res.status(409).json({
                 error: "User with the username already exists."
@@ -136,9 +122,9 @@ app.post('/signup', (req, res) => {
         }
 
         // Add user to the database
-        users.set(userCount++, user);
+        users.set(username, user);
         return res.status(201).json({
-            message: `Welcome, ${user.username}!`,
+            message: `Welcome, ${username}!`,
         });
     }
 
@@ -149,39 +135,39 @@ app.post('/signup', (req, res) => {
 });
 
 // Get a user by id
-app.get('/users/:id', (req, res) => {
-    const {id} = req.params;
-    const user = users.get(parseInt(id));
+router.get('/', (req, res) => {
+    const {username} = req.body;
+    const user = getUser(username);
 
     // Check if user exists
     if (user) {
         return res.status(200).json({
-            message: `Hello, ${user.username}!`
+            message: `Hello, ${username}!`
         });
     }
 
     res.status(404).json({
-        error: `User with id ${id} not found.`,
+        error: `User with username '${username}' not found.`,
     });
 });
 
 // Delete a user by id
-app.delete('/users/:id', (req, res) => {
-    let {id} = req.params;
-    id = parseInt(id);
-
-    const user = users.get(id);
+router.delete('/', (req, res) => {
+    const { username } = req.body;
+    const user = getUser(username);
 
     // Check if user exists
     if (user) {
-        users.delete(id);
+        users.delete(username);
         return res.status(200).json({
-            message: `User with id ${id} has been deleted.`,
+            message: `User with username '${username}' has been deleted.`,
         });
     }
 
     // If user does not exist
     res.status(404).json({
-        error: `User with id ${id} not found.`,
+        error: `User with username ${username} not found.`,
     });
 });
+
+module.exports = router;

@@ -1,20 +1,20 @@
 const express = require('express');
-const app = express();
-const port = 3000;
-
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
+const send = require('send');
+const router = express.Router();
 
 /* Database */
 let channelCount = 1;
 const channels = new Map();
 
-/* Middleware */
-app.use(express.json());
+/* Utility Functions */
+function send404(res) {
+    res.status(404).json({
+        error: 'Channel not found'
+    });
+}
 
 /* API Routes */
-app.route('/channels/:id')
+router.route('/:id')
     // Update a channel
     .put((req, res) => {
         let { id } = req.params;
@@ -46,9 +46,7 @@ app.route('/channels/:id')
             });
         }
 
-        res.status(404).json({
-            error: 'Channel not found'
-        });
+        send404(res);
     })
     // Delete a channel
     .delete((req, res) => {
@@ -63,9 +61,7 @@ app.route('/channels/:id')
             });
         }
 
-        res.status(404).json({
-            error: 'Channel not found'
-        });
+        send404(res);
     })
     // Get a channel
     .get((req, res) => {
@@ -77,24 +73,23 @@ app.route('/channels/:id')
             return res.status(200).json(channel);
         }
 
-        res.status(404).json({
-            error: 'Channel not found'
-        });
+        send404(res);
     });
 
-app.route('/channels')
+router.route('/')
     // Create a new channel
     .post((req, res) => {
-        const { channelName, description } = req.body;
+        const { username, channelName, description } = req.body;
 
         // Check if channel name is provided
         if (channelName) {
             channels.set(channelCount++, {
+                username,
                 channelName,
                 description
             });
             return res.status(201).json({
-                message: `Channel named ${channelName} has been created`
+                message: `Channel named ${channelName} for a user ${username} has been created`
             });
         }
         
@@ -102,13 +97,32 @@ app.route('/channels')
             error: 'Channel name is required'
         });
     })
-    // Get all channels
+    // Get all channels for a user
     .get((req, res) => {
+        const { username } = req.body;
+
+        // Check if username is provided
+        if (username === undefined) {
+            return res.status(400).json({
+                error: 'Login to get your channels.'
+            });
+        }
+
         // Check if there are channels
         if (channels.size) {
+            const userChannels = [];
             // convert the map to an object
-            const channelsObject = Object.fromEntries(channels.entries());
-            return res.status(200).json(channelsObject)
+            for (let channel of channels.values()) {
+                if (channel.username === username) 
+                    userChannels.push(channel);
+            }
+            
+            // Check if user has channels
+            if (userChannels.length) {
+                return res.status(200).json(userChannels);
+            }
+            
+            return send404(res);
         }
 
         res.status(404).json({
@@ -116,12 +130,4 @@ app.route('/channels')
         });
     });
 
-app.route('/users/:id/channels')
-    // Get all channels of a user
-    .get((req, res) => {
-        res.send('Get all channels of a user');
-    })
-    // Delete all channels of a user
-    .delete((req, res) => {
-        res.send('Delete all channels of a user');
-    });
+module.exports = router;
