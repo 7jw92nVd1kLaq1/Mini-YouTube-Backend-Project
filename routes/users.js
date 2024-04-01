@@ -3,31 +3,16 @@ const router = express.Router();
 
 const { pool, connection } = require('../db');
 
+
 /* Settings */
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)[A-Za-z\d\W]{8,20}$/;
 const invalidNameRegex = /[^A-Za-z- ]/;
-const invalidUsernameRegex = /[^a-zA-Z0-9!#$%&'*+\-/=?^_`{|}~\.]/;
+const invalidEmailRegex = /[^a-zA-Z0-9!#$%&'*+\-/=?^_`{|}~\.]/;
 
 
 /* Utility Functions */
 // Validate the user input for email
-async function validateEmail(email) {
-    if (email === undefined) {
-        return false;
-    }
-
-    if (email.length > 255) {
-        return false;
-    }
-
-    // Check if there are more than 2 @ symbols
-    if (email.split('@').length > 2) {
-        return false;
-    }
-
-    // Split the email by @ symbol
-    const { local, domain } = email.split('@');
-
+function validateLocalName(local) {
     // Check if the first or last character of the email is a dot
     if (local[0] === '.' || local[local.length - 1] === '.') {
         return false;
@@ -37,9 +22,58 @@ async function validateEmail(email) {
         return false;
     }
 
-    if (invalidUsernameRegex.test(local) === true) {
+    if (invalidEmailRegex.test(local) === true) {
         return false;
     }
+}
+
+function validateDomainName(domain) {  
+    // Check if the first or last character of the email is a dot
+    if (domain[0] === '.' || domain[domain.length - 1] === '.') {
+        return false;
+    }
+
+    // Check if there are a substring of two or more dots
+    if (domain.includes('..') === true) {
+        return false;
+    }
+
+    // Check if there are characters other than A-Z, a-z, 0-9, hyphen, and dot
+    if (/[^A-Za-z0-9\-\.]+/.test(domain) === true) {
+        return false;
+    }
+
+    return true;
+}
+
+function validateEmail(email) {
+    if (email === undefined) {
+        return false;
+    }
+
+    // Check if there are more than 2 @ symbols
+    if (email.split('@').length > 2) {
+        return false;
+    }
+
+    if (email.length > 320) {
+        return false;
+    }
+
+    // Split the email by @ symbol
+    const { localName, domainName } = email.split('@');
+    if (localName.length > 64) {
+        return false;
+    } else if (domainName.length > 255) {
+        return false;
+    }
+    const isLocalNameValid = validateLocalName(localName);
+    const isDomainNameValid = validateDomainName(domainName);
+    if (isLocalNameValid === false || isDomainNameValid === false) {
+        return false;
+    }
+
+    return true;
 }
 
 // Check if a user exists
@@ -134,6 +168,11 @@ router.post('/signup', async (req, res) => {
         }
 
         // Check if email is invalid
+        if (validateEmail(email) === false) {
+            return res.status(400).json({
+                error: "Email is invalid."
+            });
+        }
 
         // Check if username already exists
         const userExists = await getUser(email);
