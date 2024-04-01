@@ -1,19 +1,55 @@
 const express = require('express');
 const router = express.Router();
 
+const { pool, connection } = require('../db');
+
 /* Settings */
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)[A-Za-z\d\W]{8,20}$/;
 const invalidNameRegex = /[^A-Za-z- ]/;
-const invalidUsernameRegex = /[^A-Za-z0-9]/;
+const invalidUsernameRegex = /[^a-zA-Z0-9!#$%&'*+\-/=?^_`{|}~\.]/;
 
-/* Database */
-const users = new Map();
 
 /* Utility Functions */
+// Validate the user input for email
+async function validateEmail(email) {
+    if (email === undefined) {
+        return false;
+    }
+
+    if (email.length > 255) {
+        return false;
+    }
+
+    // Check if there are more than 2 @ symbols
+    if (email.split('@').length > 2) {
+        return false;
+    }
+
+    // Split the email by @ symbol
+    const { local, domain } = email.split('@');
+
+    // Check if the first or last character of the email is a dot
+    if (local[0] === '.' || local[local.length - 1] === '.') {
+        return false;
+    }
+    // Check if there are a substring of two or more dots
+    if (local.includes('..') === true) {
+        return false;
+    }
+
+    if (invalidUsernameRegex.test(local) === true) {
+        return false;
+    }
+}
+
 // Check if a user exists
-function getUser(username) {
-    if (users.has(username)) {
-        return users.get(username);
+async function getUser(username) {
+    const [rows, fields] = await pool.query(
+        'SELECT * FROM users WHERE email = ?', 
+        [username]
+    );
+    if (rows.length > 0) {
+        return rows[0];
     }
 
     return null;
@@ -48,61 +84,62 @@ function checkPasswordValidity(password) {
 // Login
 router.post('/login', (req, res) => {
     const {
-        username,
+        email,
         password
     } = req.body;
 
-    // Check if username and password are provided
-    let user = getUser(username);
-
-    // If username exists
-    if (user) {
-        // Check if password is correct
-        if (user.password === password) {
-            return res.status(200).json({
-                message: `Welcome back, ${username}!`
-            });
-        }
-
-        // If password is incorrect
-        return res.status(401).json({
-            error: "Password is incorrect."
+    // Check if email and password are provided
+    if (email === undefined || password === undefined) {
+        return res.status(400).json({
+            error: "Provide both email and password."
         });
     }
 
-    // If username does not exist
-    res.status(404).json({
-        error: "There is no user with the provided username."
-    });
+    const query = 'SELECT * FROM users WHERE email = ?';
+
+    connection.query(
+        query,
+        [email],
+        (errors, results, fields) => {
+            if (errors) {
+                return res.status(500).json({
+                    error: "An error occurred. Please try again."
+                });
+            }
+
+            if (results.length > 0) {
+                if (results[0].password === password)
+                    return res.status(200).json(results[0]);
+            }
+
+            res.status(401).json({
+                error: "Provide the right credentials for log-in."
+            });
+        }
+    )
 });
 
 // Signup
-router.post('/signup', (req, res) => {
+router.post('/signup', async (req, res) => {
     const {
-        username,
+        email,
         password,
         name,
     } = req.body;
 
-    // Check if username, password, and name are provided
-    if (username && password && name) {
+    if (email && password && name) {
         const user = {
             password,
             name
         }
 
-        // Check if username is invalid - alphabets and numbers only
-        if (invalidUsernameRegex.test(username) === true) {
-            return res.status(400).json({
-                error: "Username must contain only alphabets and numbers."
-            });
-        }
+        // Check if email is invalid
 
         // Check if username already exists
-        const userExists = getUser(username);
+        const userExists = await getUser(email);
         if (userExists) {
             return res.status(409).json({
-                error: "User with the username already exists."
+                error: "User with the email already exists."
             });
         }
        
@@ -121,53 +158,81 @@ router.post('/signup', (req, res) => {
             });
         }
 
-        // Add user to the database
-        users.set(username, user);
-        return res.status(201).json({
-            message: `Welcome, ${username}!`,
-        });
+        const query = 'INSERT INTO users (email, password, name) VALUES (?, ?, ?)';
+        const values = [email, password, name];
+        try {
+            await pool.query(
+                query,
+                values
+            );
+
+            return res.status(201).json({
+                message: `Welcome, ${email}!`,
+            });
+        } catch (error) {
+            return res.status(500).json({
+                error: error.message
+            });
+        }
     }
 
-    // If username, password, or name is not provided
     res.status(400).json({
-        message: 'Please provide username, password, and name.',
+        message: 'Please provide email, password, and name.',
     });
 });
 
 // Get a user by id
 router.get('/', (req, res) => {
-    const {username} = req.body;
-    const user = getUser(username);
+    const {email} = req.body;
 
-    // Check if user exists
-    if (user) {
-        return res.status(200).json({
-            message: `Hello, ${username}!`
-        });
-    }
+    const query = 'SELECT * FROM users WHERE email = ?';
+    connection.query(
+        query,
+        [email],
+        (error, results, fields) => {
+            if (error) {
+                return res.status(500).json({
+                    error: 'An error occurred. Please try again.'
+                });
+            }
 
-    res.status(404).json({
-        error: `User with username '${username}' not found.`,
-    });
+            if (results.length > 0) {
+                return res.status(200).json(results[0]);
+            }
+
+            res.status(404).json({
+                error: `User with username ${email} not found.`,
+            });
+        }
+    );
 });
 
 // Delete a user by id
 router.delete('/', (req, res) => {
-    const { username } = req.body;
-    const user = getUser(username);
+    const { email } = req.body;
 
-    // Check if user exists
-    if (user) {
-        users.delete(username);
-        return res.status(200).json({
-            message: `User with username '${username}' has been deleted.`,
-        });
-    }
+    const query = 'DELETE FROM users WHERE email = ?';
+    connection.query(
+        query,
+        [email],
+        (error, results, fields) => {
+            if (error) {
+                return res.status(500).json({
+                    error: 'An error occurred. Please try again.'
+                });
+            }
 
-    // If user does not exist
-    res.status(404).json({
-        error: `User with username ${username} not found.`,
-    });
+            if (results.affectedRows > 0) {
+                return res.status(200).json({
+                    message: `User with email ${email} has been deleted.`
+                });
+            }
+
+            res.status(404).json({
+                error: `User with email ${email} not found.`,
+            });
+        }
+    );
 });
 
 module.exports = router;
