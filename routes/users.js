@@ -1,86 +1,21 @@
 const express = require('express');
 const router = express.Router();
-
 const { pool, connection } = require('../db');
+const { body, validationResult } = require('express-validator');
+
+const { validate } = require('../middleware');
 
 
 /* Settings */
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)[A-Za-z\d\W]{8,20}$/;
 const invalidNameRegex = /[^A-Za-z- ]/;
-const invalidEmailRegex = /[^a-zA-Z0-9!#$%&'*+\-/=?^_`{|}~\.]/;
-
 
 /* Utility Functions */
-// Validate the user input for email
-function validateLocalName(local) {
-    // Check if the first or last character of the email is a dot
-    if (local[0] === '.' || local[local.length - 1] === '.') {
-        return false;
-    }
-    // Check if there are a substring of two or more dots
-    if (local.includes('..') === true) {
-        return false;
-    }
-
-    if (invalidEmailRegex.test(local) === true) {
-        return false;
-    }
-}
-
-function validateDomainName(domain) {  
-    // Check if the first or last character of the email is a dot
-    if (domain[0] === '.' || domain[domain.length - 1] === '.') {
-        return false;
-    }
-
-    // Check if there are a substring of two or more dots
-    if (domain.includes('..') === true) {
-        return false;
-    }
-
-    // Check if there are characters other than A-Z, a-z, 0-9, hyphen, and dot
-    if (/[^A-Za-z0-9\-\.]+/.test(domain) === true) {
-        return false;
-    }
-
-    return true;
-}
-
-function validateEmail(email) {
-    if (email === undefined) {
-        return false;
-    }
-
-    // Check if there are more than 2 @ symbols
-    if (email.split('@').length > 2) {
-        return false;
-    }
-
-    if (email.length > 320) {
-        return false;
-    }
-
-    // Split the email by @ symbol
-    const { localName, domainName } = email.split('@');
-    if (localName.length > 64) {
-        return false;
-    } else if (domainName.length > 255) {
-        return false;
-    }
-    const isLocalNameValid = validateLocalName(localName);
-    const isDomainNameValid = validateDomainName(domainName);
-    if (isLocalNameValid === false || isDomainNameValid === false) {
-        return false;
-    }
-
-    return true;
-}
-
 // Check if a user exists
-async function getUser(username) {
+async function getUser(email) {
     const [rows, fields] = await pool.query(
         'SELECT * FROM users WHERE email = ?', 
-        [username]
+        [email]
     );
     if (rows.length > 0) {
         return rows[0];
@@ -116,63 +51,59 @@ function checkPasswordValidity(password) {
 // });
 
 // Login
-router.post('/login', (req, res) => {
-    const {
-        email,
-        password
-    } = req.body;
+router.post(
+    '/login', 
+    [
+        body('email').notEmpty().isEmail().withMessage('Provide a valid email.'),
+        body('password').notEmpty().isString().withMessage('Provide a valid password.'),
+        validate
+    ], 
+    (req, res) => {
+        const {
+            email,
+            password
+        } = req.body;
 
-    // Check if email and password are provided
-    if (email === undefined || password === undefined) {
-        return res.status(400).json({
-            error: "Provide both email and password."
-        });
-    }
+        const query = 'SELECT * FROM users WHERE email = ?';
 
-    const query = 'SELECT * FROM users WHERE email = ?';
+        connection.query(
+            query,
+            [email],
+            (errors, results, fields) => {
+                if (errors) {
+                    return res.status(500).json({
+                        error: "An error occurred. Please try again."
+                    });
+                }
 
-    connection.query(
-        query,
-        [email],
-        (errors, results, fields) => {
-            if (errors) {
-                return res.status(500).json({
-                    error: "An error occurred. Please try again."
+                if (results.length > 0) {
+                    if (results[0].password === password)
+                        return res.status(200).json(results[0]);
+                }
+
+                res.status(401).json({
+                    error: "Provide the right credentials for log-in."
                 });
             }
-
-            if (results.length > 0) {
-                if (results[0].password === password)
-                    return res.status(200).json(results[0]);
-            }
-
-            res.status(401).json({
-                error: "Provide the right credentials for log-in."
-            });
-        }
-    )
-});
+        )
+    }
+);
 
 // Signup
-router.post('/signup', async (req, res) => {
-    const {
-        email,
-        password,
-        name,
-    } = req.body;
-
-    if (email && password && name) {
-        const user = {
+router.post(
+    '/signup',
+    [
+        body('email').notEmpty().isEmail().withMessage('Provide a valid email.'),
+        body('password').notEmpty().isString().withMessage('Provide a valid password.'),
+        body('name').notEmpty().isString().withMessage('Provide a valid name.'),
+        validate
+    ], 
+    async (req, res) => {
+        const {
+            email,
             password,
-            name
-        }
-
-        // Check if email is invalid
-        if (validateEmail(email) === false) {
-            return res.status(400).json({
-                error: "Email is invalid."
-            });
-        }
+            name,
+        } = req.body;
 
         // Check if username already exists
         const userExists = await getUser(email);
@@ -181,7 +112,7 @@ router.post('/signup', async (req, res) => {
                 error: "User with the email already exists."
             });
         }
-       
+    
         // Check if password meets the requirements
         // If password has less than 8 characters or more than 20 characters
         if (checkPasswordValidity(password) === false){
@@ -199,6 +130,7 @@ router.post('/signup', async (req, res) => {
 
         const query = 'INSERT INTO users (email, password, name) VALUES (?, ?, ?)';
         const values = [email, password, name];
+
         try {
             await pool.query(
                 query,
@@ -214,64 +146,74 @@ router.post('/signup', async (req, res) => {
             });
         }
     }
-
-    res.status(400).json({
-        message: 'Please provide email, password, and name.',
-    });
-});
+);
 
 // Get a user by id
-router.get('/', (req, res) => {
-    const {email} = req.body;
+router.get(
+    '/', 
+    [
+        body('email').notEmpty().isEmail().withMessage('Provide a valid email.'),
+        validate
+    ],
+    (req, res) => {
+        const { email } = req.body;
 
-    const query = 'SELECT * FROM users WHERE email = ?';
-    connection.query(
-        query,
-        [email],
-        (error, results, fields) => {
-            if (error) {
-                return res.status(500).json({
-                    error: 'An error occurred. Please try again.'
+        const query = 'SELECT * FROM users WHERE email = ?';
+        connection.query(
+            query,
+            [email],
+            (error, results, fields) => {
+                if (error) {
+                    return res.status(500).json({
+                        error: 'An error occurred. Please try again.'
+                    });
+                }
+
+                if (results.length > 0) {
+                    return res.status(200).json(results[0]);
+                }
+
+                res.status(404).json({
+                    error: `User with username ${email} not found.`,
                 });
             }
-
-            if (results.length > 0) {
-                return res.status(200).json(results[0]);
-            }
-
-            res.status(404).json({
-                error: `User with username ${email} not found.`,
-            });
-        }
-    );
-});
+        );
+    }
+);
 
 // Delete a user by id
-router.delete('/', (req, res) => {
-    const { email } = req.body;
+router.delete(
+    '/', 
+    [
+        body('email').notEmpty().isEmail().withMessage('Provide a valid email.'),
+        validate
+    ],
+    (req, res) => {
+        const { email } = req.body;
 
-    const query = 'DELETE FROM users WHERE email = ?';
-    connection.query(
-        query,
-        [email],
-        (error, results, fields) => {
-            if (error) {
-                return res.status(500).json({
-                    error: 'An error occurred. Please try again.'
+        const query = 'DELETE FROM users WHERE email = ?';
+        connection.query(
+            query,
+            [email],
+            (error, results, fields) => {
+                if (error) {
+                    return res.status(500).json({
+                        error: 'An error occurred. Please try again.'
+                    });
+                }
+
+                if (results.affectedRows > 0) {
+                    return res.status(200).json({
+                        message: `User with email ${email} has been deleted.`
+                    });
+                }
+
+                res.status(404).json({
+                    error: `User with email ${email} not found.`,
                 });
             }
-
-            if (results.affectedRows > 0) {
-                return res.status(200).json({
-                    message: `User with email ${email} has been deleted.`
-                });
-            }
-
-            res.status(404).json({
-                error: `User with email ${email} not found.`,
-            });
-        }
-    );
-});
+        );
+    }
+);
 
 module.exports = router;
