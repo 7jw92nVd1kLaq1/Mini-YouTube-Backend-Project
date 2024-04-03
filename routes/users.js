@@ -96,13 +96,11 @@ router.post(
                 error: `User with email ${email} already exists.`
             });
         } catch (error) {
-            if (error.status) {
-                return res.status(error.status).json({
-                    error: error.message
-                });
-            }
-            return res.status(500).json({
-                error: 'An error occurred. Please try again.'
+            const status = error.status || 500;
+            const message = error.message || 'An error occurred. Please try again.';
+
+            return res.status(status).json({
+                error: message
             });
         }
     }
@@ -163,13 +161,11 @@ router.delete(
                 error: `User with email ${email} not found.`
             });
         } catch (error) {
-            if (error.status) {
-                return res.status(error.status).json({
-                    error: error.message
-                });
-            }
-            return res.status(500).json({
-                error: 'An error occurred. Please try again.'
+            const status = error.status || 500;
+            const message = error.message || 'An error occurred. Please try again.';
+
+            return res.status(status).json({
+                error: message
             });
         }
     }

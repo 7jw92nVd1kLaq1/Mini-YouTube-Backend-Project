@@ -3,7 +3,8 @@ const {
     DuplicateEmailError,
     InvalidPasswordError,
     InvalidNameError,
-    InternalServerError
+    InternalServerError,
+    NotFoundError
 } = require('../errors');
 
 const { deleteChannelsByUserId } = require('./channel-service');
@@ -95,27 +96,41 @@ const registerUser = async (email, password, name) => {
 };
 
 const getUserByEmail = async (email) => {
-    const [rows, fields] = await pool.query(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
-    );
-    if (rows.length > 0) {
-        return rows[0];
+    let users;
+    try {
+        const [rows, fields] = await pool.query(
+            'SELECT * FROM users WHERE email = ?',
+            [email]
+        );
+        users = rows;
+    } catch (error) {
+        throw new InternalServerError();
     }
 
-    return null;
+    if (users.length === 0) {
+        throw new NotFoundError('User not found.');
+    }
+
+    return users[0];
 };
 
 const getUserById = async (id) => {
-    const [rows, fields] = await pool.query(
-        'SELECT * FROM users WHERE id = ?',
-        [id]
-    );
-    if (rows.length > 0) {
-        return rows[0];
+    let users;
+    try {
+        const [rows, fields] = await pool.query(
+            'SELECT * FROM users WHERE id = ?',
+            [id]
+        );
+        users = rows;
+    } catch (error) {
+        throw new InternalServerError();
     }
 
-    return null;
+    if (users.length === 0) {
+        throw new NotFoundError('User not found.');
+    }
+
+    return users[0];
 };
 
 module.exports = {

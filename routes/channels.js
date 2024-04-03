@@ -6,6 +6,13 @@ const { connection, pool } = require('../db');
 const { validate, jwtTokenCheck, channelAvailabilityEditCheck } = require('../middleware');
 
 const { getUserById } = require('../services/user-service');
+const { 
+    getChannelById, 
+    getChannelsByUserId, 
+    createChannel, 
+    deleteChannel, 
+    updateChannel 
+} = require('../services/channel-service');
 
 
 function send400(res, msg = 'An error occurred. Please try again.') {
@@ -42,18 +49,22 @@ router.route('/:id')
         async (req, res) => {
             let { id } = req.params;
             const { channelName } = req.body;
-            const query = 'UPDATE channels SET name = ? WHERE id = ?';
-            const values = [channelName, id];
 
             try {
-                const queryResult = await pool.query(query, values);
-                if (queryResult[0].affectedRows > 0) {
+                const updated = await updateChannel(id, channelName);
+                if (updated) {
                     return res.status(200).json({
                         message: 'Channel has been updated.'
                     });
                 }
-            } catch (error) {
                 return send400(res, 'An error occurred. Please try again.');
+            } catch (error) {
+                const statusCode = error.status || 500;
+                const message = error.message || 'An error occurred. Please try again.';
+
+                return res.status(statusCode).json({
+                    error: message
+                });
             }
         }
     )
@@ -65,29 +76,24 @@ router.route('/:id')
             param('id').notEmpty().isInt().withMessage('Provide a valid channel id.'),
             validate
         ],        
-        (req, res) => {
+        async (req, res) => {
             let { id } = req.params;
-
-            const query = 'DELETE FROM channels WHERE id = ?';
-            connection.query(
-                query,
-                [id],
-                (error, results, fields) => {
-                    if (error) {
-                        return send400(res, 'An error occurred. Please try again.');
-                    }
-
-                    if (results.affectedRows > 0) {
-                        return res.status(200).json({
-                            message: 'Channel has been deleted.'
-                        });
-                    } else if (results.affectedRows === 0) {
-                        return res.status(204).json({
-                            message: 'No changes were made.'
-                        });
-                    }
+            try {
+                const deleted = await deleteChannel(id);
+                if (deleted) {
+                    return res.status(200).json({
+                        message: 'Channel has been deleted.'
+                    });
                 }
-            );
+                return send400(res, 'An error occurred. Please try again.');
+            } catch (error) {
+                const statusCode = error.status || 500;
+                const message = error.message || 'An error occurred. Please try again.';
+
+                return res.status(statusCode).json({
+                    error: message
+                });
+            }
         }
     )
     // Get a channel
@@ -96,24 +102,20 @@ router.route('/:id')
             param('id').notEmpty().isInt().withMessage('Provide a valid channel id.'),
             validate
         ], 
-        (req, res) => {
+        async (req, res) => {
             const { id } = req.params;
-            const query = 'SELECT * FROM channels WHERE id = ?'
-            connection.query(
-                query,
-                [id],
-                (error, results, fields) => {
-                    if (error) {
-                        return send400(res, 'An error occurred. Please try again.');
-                    }
 
-                    if (results.length > 0) {
-                        return res.status(200).json(results[0]);
-                    }
+            try {
+                const channel = await getChannelById(id);
+                return res.status(200).json(channel);
+            } catch (error) {
+                const statusCode = error.status || 500;
+                const message = error.message || 'An error occurred. Please try again.';
 
-                    send404(res, 'Channel not found.');
-                }
-            );
+                return res.status(statusCode).json({
+                    error: message
+                });
+            }
         }
     );
 
@@ -134,41 +136,39 @@ router.route('/')
                 return send404(res, 'User not found.');
             }
 
-            const query = 'INSERT INTO channels (user_id, name) VALUES (?, ?)';
-            const values = [sub, channelName];
-
             try {
-                const queryResult = await pool.query(query, values);
-                if (queryResult[0].affectedRows > 0) {
+                const created = await createChannel(sub, channelName);
+                if (created) {
                     return res.status(201).json({
                         message: 'Channel has been created.'
                     });
                 }
-            } catch (error) {
                 return send400(res, 'An error occurred. Please try again.');
+            } catch (error) {
+                const statusCode = error.status || 500;
+                const message = error.message || 'An error occurred. Please try again.';
+
+                return res.status(statusCode).json({
+                    error: message
+                });
             }
     })
     // Get all channels for a user
     .get(
-        (req, res) => {
+        async (req, res) => {
             const { userId } = req.body;
             // Check if there are channels
-            const query = 'SELECT * FROM channels WHERE user_id = ?';
-            connection.query(
-                query,
-                [userId],
-                (error, results, fields) => {
-                    if (error) {
-                        return send400(res, 'An error occurred. Please try again.');
-                    }
+            try {
+                const channels = await getChannelsByUserId(userId);
+                return res.status(200).json(channels);
+            } catch (error) {
+                const statusCode = error.status || 500;
+                const message = error.message || 'An error occurred. Please try again.';
 
-                    if (results.length > 0) {
-                        return res.status(200).json(results);
-                    }
-
-                    send404(res, 'No channels found.');
-                }
-            );
+                return res.status(statusCode).json({
+                    error: message
+                });
+            }
         }
     );
 
