@@ -28,3 +28,48 @@ JWT_SECRET=secret
 ```
 4. Run `node ./app.js` to start the server
 5. The server will be running on `http://localhost:3000`
+
+## API Endpoints
+### User
+1. Register a user
+```
+POST /users/signup
+```
+2. Login a user
+```
+POST /users/login
+```
+3. Logout a user
+```
+POST /users/logout
+```
+4. Get a user
+```
+GET /users
+```
+5. Delete a user
+```
+DELETE /users
+```
+
+### Channel
+1. Create a channel
+```
+POST /channels
+```
+2. Get all channels of a user
+```
+GET /channels
+```
+3. Get a channel
+```
+GET /channels/:channelId
+```
+4. Update a channel
+```
+PUT /channels/:channelId
+```
+5. Delete a channel
+```
+DELETE /channels/:channelId
+```
