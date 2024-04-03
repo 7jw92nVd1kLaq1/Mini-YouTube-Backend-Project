@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { pool, connection } = require('../db');
-const { body, validationResult } = require('express-validator');
+const { body } = require('express-validator');
 
 const { validate } = require('../middleware');
+const { createLoginToken } = require('../jwt');
 
 
 /* Settings */
@@ -78,7 +79,13 @@ router.post(
 
                 if (results.length > 0) {
                     if (results[0].password === password)
-                        return res.status(200).json(results[0]);
+                    {
+                        const token = createLoginToken(results[0]);
+                        res.cookie('token', token);
+                        return res.status(200).json({
+                            message: `Welcome back, ${results[0].email}!`
+                        });
+                    }
                 }
 
                 res.status(401).json({
@@ -132,13 +139,22 @@ router.post(
         const values = [email, password, name];
 
         try {
-            await pool.query(
+            const results = await pool.query(
                 query,
                 values
             );
 
+            if (results[0].affectedRows === 0) {
+                return res.status(500).json({
+                    error: "An error occurred. Please try again."
+                });
+            }
+
+            const user = await getUser(email);
+            const token = createLoginToken(user);
+            res.cookie('token', token);
             return res.status(201).json({
-                message: `Welcome, ${email}!`,
+                message: "User has been created."
             });
         } catch (error) {
             return res.status(500).json({
