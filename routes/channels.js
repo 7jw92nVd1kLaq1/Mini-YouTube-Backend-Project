@@ -2,9 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { param, body } = require('express-validator');
 
-const { connection, pool } = require('../db');
-const { validate, jwtTokenCheck, channelAvailabilityEditCheck } = require('../middleware');
-
+const { validate, jwtTokenCheck, channelEditPermissionCheck } = require('../middleware');
 const { getUserById } = require('../services/user-service');
 const { 
     getChannelById, 
@@ -41,7 +39,7 @@ router.route('/:id')
     .put(
         [
             jwtTokenCheck,
-            channelAvailabilityEditCheck,
+            channelEditPermissionCheck,
             param('id').notEmpty().isInt().withMessage('Provide a valid channel id.'),
             body('channelName').notEmpty().isString().withMessage('Provide a valid channel name.'),
             validate
@@ -72,7 +70,7 @@ router.route('/:id')
     .delete(
         [
             jwtTokenCheck,
-            channelAvailabilityEditCheck,
+            channelEditPermissionCheck,
             param('id').notEmpty().isInt().withMessage('Provide a valid channel id.'),
             validate
         ],        

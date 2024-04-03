@@ -1,7 +1,6 @@
 const { validationResult } = require('express-validator');
 const { verify } = require('./services/auth-service');
 const { getChannelById } = require('./services/channel-service');
-const { pool } = require('./db');
 
 const validate = (req, res, next) => {
     const errors = validationResult(req);
@@ -31,7 +30,7 @@ const jwtTokenCheck = (req, res, next) => {
     next();
 };
 
-const channelAvailabilityEditCheck = async (req, res, next) => {
+const channelEditPermissionCheck = async (req, res, next) => {
     const { id } = req.params;
     const { sub } = req.user;
 
@@ -54,7 +53,7 @@ const channelAvailabilityEditCheck = async (req, res, next) => {
 };
 
 module.exports = {
-    channelAvailabilityEditCheck,
+    channelEditPermissionCheck,
     jwtTokenCheck,
     validate
 };

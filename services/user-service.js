@@ -11,7 +11,7 @@ const { deleteChannelsByUserId } = require('./channel-service');
 
 
 /* RegEx Patterns */
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)[A-Za-z\d\W]{8,20}$/;
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)[A-Za-z\d\W]$/;
 const invalidNameRegex = /[^A-Za-z- ]/;
 
 
@@ -39,9 +39,9 @@ const deleteUser = async (userId) => {
     const query = 'DELETE FROM users WHERE id = ?';
     const values = [userId];
 
+    // Delete all channels associated with the user
+    await deleteChannelsByUserId(userId);
     try {
-        // Delete all channels associated with the user
-        await deleteChannelsByUserId(userId);
         const results = await pool.query(
             query,
             values
@@ -59,8 +59,8 @@ const deleteUser = async (userId) => {
 
 const registerUser = async (email, password, name) => {
     // Check if username already exists
-    const userExists = await getUserByEmail(email);
-    if (userExists) {
+    let user = await getUserByEmail(email);
+    if (user) {
         throw new DuplicateEmailError();
     }
 
@@ -78,21 +78,24 @@ const registerUser = async (email, password, name) => {
     const query = 'INSERT INTO users (email, password, name) VALUES (?, ?, ?)';
     const values = [email, password, name];
 
+    let result;
     try {
         const results = await pool.query(
             query,
             values
         );
 
-        if (results[0].affectedRows === 0) {
-            throw new InternalServerError();
-        }
-
-        const user = await getUserByEmail(email);
-        return user ? user : null;
+        result = results[0];
     } catch (error) {
         throw new InternalServerError();
     }
+
+    if (result.affectedRows === 0) {
+        throw new InternalServerError();
+    }
+
+    user = await getUserByEmail(email);
+    return user ? user : null;
 };
 
 const getUserByEmail = async (email) => {
@@ -108,7 +111,7 @@ const getUserByEmail = async (email) => {
     }
 
     if (users.length === 0) {
-        throw new NotFoundError('User not found.');
+        return null;
     }
 
     return users[0];
@@ -127,7 +130,7 @@ const getUserById = async (id) => {
     }
 
     if (users.length === 0) {
-        throw new NotFoundError('User not found.');
+        return null;
     }
 
     return users[0];

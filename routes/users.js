@@ -1,11 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { connection } = require('../db');
 const { body } = require('express-validator');
 
 const { validate, jwtTokenCheck } = require('../middleware');
 const { createLoginToken } = require('../services/auth-service');
-const { deleteUser, registerUser } = require('../services/user-service');
+const { deleteUser, getUserByEmail, registerUser } = require('../services/user-service');
 
 
 /* API Routes */
@@ -17,40 +16,35 @@ router.post(
         body('password').notEmpty().isString().withMessage('Provide a valid password.'),
         validate
     ], 
-    (req, res) => {
+    async (req, res) => {
         const {
             email,
             password
         } = req.body;
 
-        const query = 'SELECT * FROM users WHERE email = ?';
+        try {
+            const user = await getUserByEmail(email);
+            if (user) {
+                if (user.password === password) {
+                    const token = createLoginToken(user);
+                    res.cookie('token', token);
 
-        connection.query(
-            query,
-            [email],
-            (errors, results, fields) => {
-                if (errors) {
-                    return res.status(500).json({
-                        error: "An error occurred. Please try again."
+                    return res.status(200).json({
+                        message: `Welcome back, ${user.email}!`
                     });
                 }
-
-                if (results.length > 0) {
-                    if (results[0].password === password)
-                    {
-                        const token = createLoginToken(results[0]);
-                        res.cookie('token', token);
-                        return res.status(200).json({
-                            message: `Welcome back, ${results[0].email}!`
-                        });
-                    }
-                }
-
-                res.status(401).json({
-                    error: "Provide the right credentials for log-in."
-                });
             }
-        )
+            return res.status(401).json({
+                error: 'Provide the right credentials for log-in.'
+            });
+        } catch (error) {
+            const status = error.status || 500;
+            const message = error.message || 'An error occurred. Please try again.';
+
+            return res.status(status).json({
+                error: message
+            });
+        }
     }
 );
 
@@ -92,8 +86,8 @@ router.post(
                     message: `User with email ${email} has been created.`
                 });
             }
-            return res.status(409).json({
-                error: `User with email ${email} already exists.`
+            return res.status(500).json({
+                error: 'An error occurred. Please try again.'
             });
         } catch (error) {
             const status = error.status || 500;
@@ -113,29 +107,26 @@ router.get(
         body('email').notEmpty().isEmail().withMessage('Provide a valid email.'),
         validate
     ],
-    (req, res) => {
+    async (req, res) => {
         const { email } = req.body;
 
-        const query = 'SELECT * FROM users WHERE email = ?';
-        connection.query(
-            query,
-            [email],
-            (error, results, fields) => {
-                if (error) {
-                    return res.status(500).json({
-                        error: 'An error occurred. Please try again.'
-                    });
-                }
-
-                if (results.length > 0) {
-                    return res.status(200).json(results[0]);
-                }
-
-                res.status(404).json({
-                    error: `User with username ${email} not found.`,
-                });
+        try {
+            const user = await getUserByEmail(email);
+            if (user) {
+                return res.status(200).json(user);
             }
-        );
+
+            return res.status(404).json({
+                error: `User with email ${email} not found.`
+            });
+        } catch (error) {
+            const status = error.status || 500;
+            const message = error.message || 'An error occurred. Please try again.';
+
+            return res.status(status).json({
+                error: message
+            });
+        }
     }
 );
 
